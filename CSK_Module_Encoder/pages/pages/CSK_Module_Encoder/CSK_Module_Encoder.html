@@ -6,12 +6,13 @@
         <layout-row id="RowLayout19">
             <layout-column id="ColumnLayout26" style="align-items: stretch">
                 <layout-row id="RowLayout01" style="align-items: baseline">
-                    <davinci-value-display id="VD_Title" class="myCustomLabel_CSK_Module_Encoder" value="Encoder">
-                    </davinci-value-display>
+                    <h1 id="Heading_Title" class="myCustomLabel_CSK_Module_Encoder">
+                        Encoder
+                    </h1>
                     <davinci-value-display id="VD_Version">
-                        <crown-edpws-binding property="value" name="CSK_Encoder/OnNewStatusModuleVersion"
-                            update-on-resume>
-                        </crown-edpws-binding>
+						<crown-on property="value"
+							crown-event="CSK_Encoder/OnNewStatusModuleVersion">
+						</crown-on>
                     </davinci-value-display>
                 </layout-row>
             </layout-column>
@@ -63,9 +64,10 @@
                                                                     style="justify-content: center; align-items: center">
                                                                     <davinci-button id="B_LoadConfig"
                                                                         class="myCustomButton_CSK_Module_Encoder"
-                                                                        type="outline" icon-position="append"
-                                                                        title="Load configured parameters from CSK_PersistentData module."
-                                                                        icon="action/history">
+                                                                        type="outline"
+                                                                        title="Load configured parameters from CSK_PersistentData module.">
+                                                                        <davinci-icon icon="action/history">
+                                                                        </davinci-icon>
                                                                         <span></span>
                                                                         <crown-binding event="submit"
                                                                             name="CSK_Encoder/loadParameters"
@@ -79,9 +81,10 @@
                                                                     </davinci-button>
                                                                     <davinci-button id="B_SaveConfig"
                                                                         class="myCustomButton_CSK_Module_Encoder"
-                                                                        type="outline" icon-position="append"
-                                                                        title="Save current configured parameters of this module within CSK_PersistentData module."
-                                                                        icon="content/save">
+                                                                        type="outline"
+                                                                        title="Save current configured parameters of this module within CSK_PersistentData module.">
+                                                                        <davinci-icon icon="content/save">
+                                                                        </davinci-icon>
                                                                         <span></span>
                                                                         <crown-binding event="submit"
                                                                             name="CSK_Encoder/sendParameters"
