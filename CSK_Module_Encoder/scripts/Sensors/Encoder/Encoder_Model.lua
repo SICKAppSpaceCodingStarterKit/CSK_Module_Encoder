@@ -31,10 +31,12 @@ setEncoder_ModelHandle(encoder_Model)
 --Loading helper functions if needed
 encoder_Model.helperFuncs = require('Sensors/Encoder/helper/funcs')
 
-encoder_Model.moduleActive = true -- Features provided by device (APIs available)
-
 -- Create parameters / instances for this module
+encoder_Model.styleForUI = 'None' -- Optional parameter to set UI style
+encoder_Model.version = Engine.getCurrentAppVersion() -- Version of module
 encoder_Model.availableInterfaces = {} -- List of available connectors to connect the encoder
+encoder_Model.availableForwardInterfaces = {} -- List of available interfaces to forward encoder data
+encoder_Model.forwardAvailable = false -- Status if it is possible to forward encoder data on other interface (needs to be a SerialPort)
 
 -- Check if specific API was loaded via
 if _G.availableAPIs.specific then
@@ -51,6 +53,7 @@ if _G.availableAPIs.specific then
   end
   for key, value in ipairs(serialPortList) do
     table.insert(encoder_Model.availableInterfaces, value)
+    table.insert(encoder_Model.availableForwardInterfaces, value)
   end
 
   encoder_Model.availableEncoderIncrementSources = Engine.getEnumValues('EncoderIncrementSources') -- Relevant to set encoder source
@@ -71,34 +74,21 @@ if _G.availableAPIs.specific then
 
   -- Parameters to be saved permanently if wanted
   encoder_Model.parameters = {}
-
-  encoder_Model.parameters.encoderActive = false -- Status if encoder features are active
+  encoder_Model.parameters = encoder_Model.helperFuncs.defaultParameters.getParameters() -- Load default parameters
 
   encoder_Model.parameters.encoderInterface = encoder_Model.availableInterfaces[1] -- Source of connected encoder (e.g. S4, INC, SER1)
+
+  -- Check if it is possible to forward the encoder data from the interface
+  for _, value in ipairs(encoder_Model.availableForwardInterfaces) do
+    if encoder_Model.parameters.encoderInterface == value then
+      encoder_Model.forwardAvailable = true
+    end
+  end
+
+  encoder_Model.parameters.forwardInterface = encoder_Model.availableForwardInterfaces[1] -- Interface to optionally forward encoder data
   encoder_Model.parameters.encoderSource = encoder_Model.availableEncoderIncrementSources[1]  -- Devices identifier of the encoder (e.g. ENC1)
-
   encoder_Model.parameters.decoderInstance = encoder_Model.availableDecoderInstances[1] or '' -- Instance of decoder to use
-  encoder_Model.parameters.decoderHighResolution = false -- Status if using high resolution or robust mode
-  encoder_Model.parameters.decoderCountMode = 'POSITIVE_MOVEMENT' -- Select how increments will be counted, 'BIDIRECTIONAL', 'POSITIVE_MOVEMENT', 'NEGATIVE_MOVEMENT', 'FORWARD_MOVEMENT', 'BACKWARD_MOVEMENT'
-  encoder_Model.parameters.decoderPrescaler = 1 -- Prescaler value for the increment input
-  encoder_Model.parameters.decoderNumberOfPhases = 'DUAL_PHASE' -- Select 'SINGLE_PHASE' (A_in) / 'DUAL_PHASE' (A_in and B_in)
-
-  encoder_Model.parameters.timerActive = false -- Status if encoder data should be pulled periodically
-  encoder_Model.parameters.timerCycle = 1000 -- Cycle time to get increment values
-
-  encoder_Model.parameters.conveyorActive = false -- Status if conveyor featues should be used
   encoder_Model.parameters.conveyorSource = encoder_Model.availableIncrementSources[1] or '' -- Source of increment source to be used for updating the system increment
-  encoder_Model.parameters.conveyorResolution = 1 -- Resolution in micrometer/increment
-  encoder_Model.parameters.conveyorPrescaler = 1 -- Prescaler value for the increment input
-
-  encoder_Model.parameters.conveyorTimeoutActive = false -- Status if conveyor timeout should be used
-  encoder_Model.parameters.conveyorTimeoutValue = 100 -- Can be ticks or mm
-  encoder_Model.parameters.conveyorTimeoutMode = 'TICKS' -- 'TICKS' or 'DISTANCE'
-
-else
-  encoder_Model.moduleActive = false
-  _G.logger:warning(nameOfModule .. ': Necessary CROWNs are not available on this device. Module is not supported...')
-
 end
 
 --**************************************************************************
@@ -106,6 +96,13 @@ end
 --**************************************************************************
 --**********************Start Function Scope *******************************
 --**************************************************************************
+
+--- Function to react on UI style change
+local function handleOnStyleChanged(theme)
+  encoder_Model.styleForUI = theme
+  Script.notifyEvent("Encoder_OnNewStatusCSKStyle", encoder_Model.styleForUI)
+end
+Script.register('CSK_PersistentData.OnNewStatusCSKStyle', handleOnStyleChanged)
 
 --- Function to periodically pull increment / conveyor information
 local function handleOnTimerExpired()
@@ -149,7 +146,6 @@ end
 
 --- Function to notify when conveyor timeout expired and restart it
 local function handleOnConveyorTimerExpired()
-  print("Got trigger") --DEBUG
   restartConveyorTimeout()
   Script.notifyEvent('Encoder_OnConveyorTimeout', DateTime.getTimestamp())
 end
@@ -207,7 +203,6 @@ local function setupEncoder()
     encoder_Model.flow = Flow.create()
     encoder_Model.flow:setType('CFLOW')
 
-
     if string.sub(encoder_Model.parameters.encoderInterface, 1, 2) == 'IN' then
       -- TTL encoder connected on INC port
 
@@ -225,6 +220,18 @@ local function setupEncoder()
 
       encoder_Model.flow:addLink('IncIn:A_in', 'Encoder:A_in')
       encoder_Model.flow:addLink('IncIn:B_in', 'Encoder:B_in')
+
+      if encoder_Model.parameters.forwardActive == true then
+        if encoder_Model.parameters.forwardInterface ~= encoder_Model.parameters.encoderInterface then
+          encoder_Model.flow:addProviderBlock('Transmit', 'Connector.Serial.transmit')
+          encoder_Model.flow:setCreationParameter('Transmit', encoder_Model.parameters.forwardInterface)
+
+          encoder_Model.flow:addLink('IncIn:A_in', 'Transmit:A_out')
+          encoder_Model.flow:addLink('IncIn:B_in', 'Transmit:B_out')
+        else
+          _G.logger:warning(nameOfModule .. ": Not possible to forward encoder data on this interface.")
+        end
+      end
 
       encoder_Model.flow:start()
 
@@ -245,6 +252,18 @@ local function setupEncoder()
 
       encoder_Model.flow:addLink('SerIn:A_in', 'Encoder:A_in')
       encoder_Model.flow:addLink('SerIn:B_in', 'Encoder:B_in')
+
+      if encoder_Model.parameters.forwardActive == true then
+        if encoder_Model.parameters.forwardInterface ~= encoder_Model.parameters.encoderInterface then
+          encoder_Model.flow:addProviderBlock('Transmit', 'Connector.Increment.transmit')
+          encoder_Model.flow:setCreationParameter('Transmit', encoder_Model.parameters.forwardInterface)
+
+          encoder_Model.flow:addLink('IncIn:A_in', 'Transmit:A_out')
+          encoder_Model.flow:addLink('IncIn:B_in', 'Transmit:B_out')
+        else
+          _G.logger:warning(nameOfModule .. ": Not possible to forward encoder data on this interface.")
+        end
+      end
 
       encoder_Model.flow:start()
 
