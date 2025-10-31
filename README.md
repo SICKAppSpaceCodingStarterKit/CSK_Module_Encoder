@@ -11,9 +11,9 @@ For further information check out the [documentation](https://raw.githack.com/SI
 ## Information
 
 Tested on:
-|Device|Firmware|Module version
+|Device|Firmware|Module version|
 |--|--|--|
-SIM1012|V2.4.2|V1.0.0|
+|SIM1012|V2.4.2|V1.0.0|
 
 This module is part of the SICK AppSpace Coding Starter Kit developing approach.  
 It is programmed in an object-oriented way. Some of these modules use kind of "classes" in Lua to make it possible to reuse code / classes in other projects.  
